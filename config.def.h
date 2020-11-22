@@ -5,7 +5,7 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "Liberation Mono:pixelsize=12:antialias=true:autohint=true";
+static char *font = "Noto Sans Mono:pixelsize=12:antialias=true:autohint=true";
 static int borderpx = 2;
 
 /*
@@ -93,44 +93,57 @@ char *termname = "st-256color";
  */
 unsigned int tabspaces = 8;
 
+/* bg opacity */
+float alpha = 0.9, alphaUnfocused = 0.7;
+
 /* Terminal colors (16 first used in escape sequence) */
-static const char *colorname[] = {
-	/* 8 normal colors */
-	"black",
-	"red3",
-	"green3",
-	"yellow3",
-	"blue2",
-	"magenta3",
-	"cyan3",
-	"gray90",
-
-	/* 8 bright colors */
-	"gray50",
-	"red",
-	"green",
-	"yellow",
-	"#5c5cff",
-	"magenta",
-	"cyan",
-	"white",
-
-	[255] = 0,
-
-	/* more colors can be added after 255 to use with DefaultXX */
-	"#cccccc",
-	"#555555",
+#define PALETTE_SIZE 261
+#define DEFAULT_PALETTE 0
+static const char *palettes[][PALETTE_SIZE] = {
+	{ /* basic theme */
+		"black", "red3", "green3", "yellow3", "blue2", "magenta3", "cyan3", "gray90",
+		"gray50", "red", "green", "yellow", "#5c5cff", "magenta", "cyan", "white",
+		[255] = 0, "#cccccc", "#555555", "black", "black", "gray90",
+	},
+	{ /* ubuntu theme */
+		"#2E3436", "#CC0000", "#4E9A06", "#C4A000", "#3465A4", "#75507B", "#06989A", "#D3D7CF",
+		"#555753", "#EF2929", "#8AE234", "#FCE94F", "#729FCF", "#AD7FA8", "#34E2E2", "#EEEEEC",
+		[255] = 0, "#ffffff", "#ffffff", "#300a24", "#300a24", "#ffffff",
+	},
+	{ /* dracula theme */
+		"#000000", "#ff5555", "#50fa7b", "#f1fa8c", "#bd93f9", "#ff79c6", "#8be9fd", "#bbbbbb",
+		"#44475a", "#ff5555", "#50fa7b", "#f1fa8c", "#bd93f9", "#ff79c6", "#8be9fd", "#ffffff",
+		[255] = 0, "#f8f8f2", "#787872", "#282a36", "#282a36", "#f8f8f2",
+	},
+	{ /* dark solarized theme */
+		"#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5",
+		"#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3",
+		[255] = 0, "#93a1a1", "#fdf6e3", "#002b36", "#002b36",  "#839496",
+	},
+	{ /* gruvbox theme */
+		"#fbf1c7", "#cc241d", "#98971a", "#d79921", "#458588", "#b16286", "#689d6a", "#7c6f64",
+		"#928374", "#9d0006", "#79740e", "#b57614", "#076678", "#8f3f71", "#427b58", "#3c3836",
+		[255] = 0, "#3c3836", "#7c6f64", "#3c3836", "#3c3836", "#fbf1c7",
+	},
+	{ /* nordtheme theme */
+		"#3b4252", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#88c0d0", "#e5e9f0",
+		"#4c566a", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#8fbcbb", "#eceff4",
+		[255] = 0, "#d8dee9", "#2e3440", "#2e3440", "#2e3440", "#d8dee9",
+	},
 };
+
+static const char **colorname;
 
 
 /*
  * Default colors (colorname index)
  * foreground, background, cursor, reverse cursor
  */
-unsigned int defaultfg = 7;
-unsigned int defaultbg = 0;
+unsigned int defaultfg = 260;
+unsigned int defaultbg = 258;
 static unsigned int defaultcs = 256;
 static unsigned int defaultrcs = 257;
+unsigned int bg = 258, bgUnfocused = 259;
 
 /*
  * Default shape of cursor
@@ -174,6 +187,8 @@ static uint forcemousemod = ShiftMask;
  */
 static MouseShortcut mshortcuts[] = {
 	/* mask                 button   function        argument       release */
+	{ XK_ANY_MOD,            Button4, kscrollup,      {.i = 1} },
+	{ XK_ANY_MOD,            Button5, kscrolldown,    {.i = 1} },
 	{ XK_ANY_MOD,           Button2, selpaste,       {.i = 0},      1 },
 	{ ShiftMask,            Button4, ttysend,        {.s = "\033[5;2~"} },
 	{ XK_ANY_MOD,           Button4, ttysend,        {.s = "\031"} },
@@ -199,6 +214,18 @@ static Shortcut shortcuts[] = {
 	{ TERMMOD,              XK_Y,           selpaste,       {.i =  0} },
 	{ ShiftMask,            XK_Insert,      selpaste,       {.i =  0} },
 	{ TERMMOD,              XK_Num_Lock,    numlock,        {.i =  0} },
+	{ ShiftMask,            XK_Page_Up,     kscrollup,      {.i = -1} },
+	{ ShiftMask,            XK_Page_Down,   kscrolldown,    {.i = -1} },
+	{ TERMMOD,              XK_Return,      newterm,        {.i =  0} },
+	{ TERMMOD,              XK_F1,          setpalette,     {.i =  0} },
+	{ TERMMOD,              XK_F2,          setpalette,     {.i =  1} },
+	{ TERMMOD,              XK_F3,          setpalette,     {.i =  2} },
+	{ TERMMOD,              XK_F4,          setpalette,     {.i =  3} },
+	{ TERMMOD,              XK_F5,          setpalette,     {.i =  4} },
+	{ TERMMOD,              XK_F6,          setpalette,     {.i =  5} },
+	{ TERMMOD,              XK_F7,          setpalette,     {.i =  6} },
+	{ TERMMOD,              XK_F8,          setpalette,     {.i =  7} },
+	{ TERMMOD,              XK_F9,          setpalette,     {.i =  8} },
 };
 
 /*
